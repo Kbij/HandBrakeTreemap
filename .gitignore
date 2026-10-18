@@ -1,0 +1,78 @@
+## .NET / Visual Studio ignore file for HandBrakeTreemap
+
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]64/
+[Ll]og/
+[Ll]ogs/
+artifacts/
+publish/
+*.pubxml.user
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.rsuser
+_ReSharper*/
+*.DotSettings.user
+.idea/
+*.sln.iml
+
+# Rider / VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!**/[Pp]ackages/build/
+project.lock.json
+project.fragment.lock.json
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+*.trx
+coverage*.json
+coverage*.xml
+*.coverage
+
+# Misc
+*.log
+*.tmp
+*.cache
+~$*
+*~
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Video files never belong in this repo (handy when testing next to media)
+*.mkv
+*.mp4
+*.m4v
+*.avi
+*.mov
+*.wmv
+*.hbtmp.mkv
+
+# Third-party binaries (HandBrakeCLI.exe is downloaded separately, ~75 MB)
+HandBrakeCLI.exe
+*.exe
+*.dll
+!Assets/**

@@ -1,0 +1,247 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:HandBrakeTreemap.ViewModels"
+        xmlns:m="clr-namespace:HandBrakeTreemap.Models"
+        xmlns:s="clr-namespace:HandBrakeTreemap.Services"
+        x:Class="HandBrakeTreemap.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Width="1320" Height="820"
+        MinWidth="960" MinHeight="600"
+        Icon="/Assets/app.ico"
+        Title="HandBrake Treemap — mappen omzetten naar .mkv">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="#59636E"/>
+        </Style>
+        <Style Selector="TextBlock.done">
+            <Setter Property="Foreground" Value="#1A7F37"/>
+        </Style>
+        <Style Selector="TextBlock.colhead">
+            <Setter Property="Foreground" Value="#59636E"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TreeViewItem">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+        </Style>
+        <!-- TreeViewItem has no HorizontalContentAlignment; stretch the header presenter
+             in the template instead so the right-hand columns line up. -->
+        <Style Selector="TreeViewItem /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="#CF222E"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto,8,170" Margin="10">
+
+        <!-- ============ Top: inputs ============ -->
+        <StackPanel Grid.Row="0" Spacing="6">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="Map:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox   Grid.Column="1" Text="{Binding FolderPath}" Watermark="Pad naar je mediamap…"
+                           IsEnabled="{Binding IsNotBusy}"/>
+                <Button    Grid.Column="2" Content="Bladeren…" Click="OnBrowseFolder" Margin="6,0,0,0"
+                           IsEnabled="{Binding IsNotBusy}"/>
+                <Button    Grid.Column="3" Content="Scan" Click="OnScan" Margin="6,0,0,0" Width="90"
+                           Classes="accent" IsEnabled="{Binding IsNotBusy}"/>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="HandBrakeCLI:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox   Grid.Column="1" Text="{Binding HandBrakePath}" IsEnabled="{Binding IsNotBusy}"/>
+                <Button    Grid.Column="2" Content="Zoeken…" Click="OnBrowseHandBrake" Margin="6,0,0,0"
+                           IsEnabled="{Binding IsNotBusy}"
+                           ToolTip.Tip="Kies HandBrakeCLI.exe op je pc"/>
+                <Button    Grid.Column="3" Content="Test" Click="OnRefreshHandBrake" Margin="6,0,0,0"
+                           IsEnabled="{Binding IsNotBusy}"/>
+            </Grid>
+            <TextBlock Text="{Binding HandBrakeStatus}" Classes="muted" FontSize="12"/>
+
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="Preset:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox  Grid.Column="1" MinWidth="300" MaxDropDownHeight="500"
+                           ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
+                           IsEnabled="{Binding IsNotBusy}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="s:PresetItem">
+                            <TextBlock Text="{Binding Display}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Grid.Column="2" Text="Preset-bestand:" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                <TextBox   Grid.Column="3" Text="{Binding PresetImportFile}"
+                           Watermark="(optioneel) geëxporteerde HandBrake preset .json"
+                           IsEnabled="{Binding IsNotBusy}"/>
+                <Button    Grid.Column="4" Content="…" Click="OnBrowsePreset" Margin="6,0,0,0" Width="36"
+                           IsEnabled="{Binding IsNotBusy}"/>
+                <TextBlock Grid.Column="5" Text="Min. besparing:" VerticalAlignment="Center" Margin="16,0,8,0"
+                           ToolTip.Tip="Spaart een omzetting minder dan dit, dan wordt de .mkv weggegooid en het origineel hernoemd naar *.nomkv.* (wordt daarna overgeslagen)."/>
+                <NumericUpDown Grid.Column="6" Value="{Binding MinSavingPercent}" Minimum="0" Maximum="100"
+                               Increment="1" FormatString="0" Width="110" IsEnabled="{Binding IsNotBusy}"/>
+                <TextBlock Grid.Column="7" Text="%" VerticalAlignment="Center" Margin="4,0,0,0"/>
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding PresetInfo}" Classes="muted" FontSize="12"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Presets opnieuw zoeken" Click="OnReloadPresets"
+                        Padding="8,2" FontSize="12" IsEnabled="{Binding IsNotBusy}"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- ============ Middle: folder tree + details ============ -->
+        <Grid Grid.Row="1" ColumnDefinitions="3*,4,2*" Margin="0,10,0,10">
+
+            <!-- Folder tree (WinDirStat-style) -->
+            <Border Grid.Column="0" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="4" Padding="0,6,0,0">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,100,90,50,90" Margin="12,0,26,4">
+                        <TextBlock Grid.Column="0" Classes="colhead" Text="Map"/>
+                        <TextBlock Grid.Column="1" Classes="colhead" Text="Aandeel" HorizontalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Classes="colhead" Text="Om te zetten" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Column="3" Classes="colhead" Text="#" HorizontalAlignment="Right"/>
+                        <TextBlock Grid.Column="4" Classes="colhead" Text="Bespaard" HorizontalAlignment="Right"/>
+                    </Grid>
+
+                    <TreeView Grid.Row="1" ItemsSource="{Binding Roots}"
+                              SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate x:DataType="m:FolderNode" ItemsSource="{Binding Children}">
+                                <Grid ColumnDefinitions="*,100,90,50,90" Background="Transparent">
+                                    <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Classes.done="{Binding IsDone}"/>
+                                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="100" MinWidth="0"
+                                                 Height="8" Margin="8,0" VerticalAlignment="Center"
+                                                 Value="{Binding PendingFraction}"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding PendingDisplay}"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding CountDisplay}" Classes="muted"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding SavedDisplay}" Classes="done"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                </Grid>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Background="#D0D7DE" ResizeDirection="Columns"/>
+
+            <!-- Details of the selected folder -->
+            <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*" Margin="8,0,0,0">
+                <TextBlock Grid.Row="0" Text="{Binding SelectedTitle}" FontWeight="SemiBold" FontSize="14"
+                           TextTrimming="CharacterEllipsis"/>
+                <StackPanel Grid.Row="1" Spacing="2" Margin="0,4,0,8">
+                    <TextBlock Text="{Binding SelectedPendingText}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding SelectedConvertedText}" Classes="done" TextWrapping="Wrap"/>
+                </StackPanel>
+                <WrapPanel Grid.Row="2" Margin="0,0,0,6">
+                    <Button Content="Open map" Click="OnOpenFolder" Margin="0,0,6,4"/>
+                    <Button Content="Zet bestand om" Click="OnConvertFile" Margin="0,0,6,4" Classes="accent"
+                            IsEnabled="{Binding IsNotBusy}"
+                            ToolTip.Tip="Zet alleen het geselecteerde bestand om (handig als test van een preset)"/>
+                    <Button Content="Speel origineel" Click="OnPlayOriginal" Margin="0,0,6,4"/>
+                    <Button Content="Speel .mkv" Click="OnPlayMkv" Margin="0,0,6,4"/>
+                    <Button Content="Toon in Verkenner" Click="OnReveal" Margin="0,0,6,4"/>
+                </WrapPanel>
+
+                <Border Grid.Row="3" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="4">
+                    <ListBox ItemsSource="{Binding SelectedFiles}"
+                             SelectedItem="{Binding SelectedFile, Mode=TwoWay}"
+                             x:Name="FileList"
+                             Background="Transparent" SelectionMode="Single">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="m:VideoFile">
+                                <StackPanel Spacing="1" Margin="0,2">
+                                    <TextBlock Text="{Binding RelativePath}" TextWrapping="Wrap" FontSize="12"/>
+                                    <Grid ColumnDefinitions="Auto,*">
+                                        <TextBlock Grid.Column="0" Text="{Binding SizeInfo}" FontSize="11"
+                                                   Classes="muted" Margin="0,0,12,0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding StatusDisplay}" FontSize="11"
+                                                   Foreground="#0969DA" TextWrapping="Wrap"/>
+                                    </Grid>
+                                    <ProgressBar Height="6" Minimum="0" Maximum="100" MinWidth="0"
+                                                 Value="{Binding Progress}" IsVisible="{Binding IsConverting}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ============ Bottom: actions + progress + status ============ -->
+        <StackPanel Grid.Row="2" Spacing="6">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+                <Button Grid.Column="0" Content="Zet geselecteerde map om" Click="OnConvertFolder"
+                        Classes="accent" IsEnabled="{Binding IsNotBusy}"/>
+                <Button Grid.Column="1" Content="Stop" Click="OnCancel" Margin="6,0,0,0"
+                        IsEnabled="{Binding IsBusy}"/>
+                <Button Grid.Column="2" Content="Controleer omzettingen" Click="OnVerify" Margin="18,0,0,0"
+                        IsEnabled="{Binding IsNotBusy}"/>
+
+                <CheckBox Grid.Column="4" Content="Alleen gecontroleerde" IsChecked="{Binding OnlyVerified}"
+                          VerticalAlignment="Center"/>
+                <CheckBox Grid.Column="5" Content="Naar prullenbak" IsChecked="{Binding UseRecycleBin}"
+                          IsVisible="{Binding RecycleBinAvailable}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6" Margin="12,0,0,0">
+                    <Button Content="Verwijder omgezette (.mkv)…" Click="OnDeleteConverted"
+                            IsEnabled="{Binding IsNotBusy}"
+                            ToolTip.Tip="Verwijdert de .mkv-bestanden in deze map; de originelen blijven en komen terug op 'te doen'."/>
+                    <Button Content="Verwijder originelen…" Click="OnDeleteOriginals"
+                            Classes="danger" IsEnabled="{Binding IsNotBusy}"
+                            ToolTip.Tip="Verwijdert de originelen waarvan de .mkv er (nog) is."/>
+                </StackPanel>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,16,*">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding CurrentFileText}" Classes="muted" FontSize="11"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Column="1" Text="{Binding CurrentDetail}" FontSize="11" FontWeight="SemiBold"
+                                   Margin="8,0,0,0"/>
+                    </Grid>
+                    <ProgressBar Minimum="0" Maximum="100" MinWidth="0" Height="16" ShowProgressText="True"
+                                 Value="{Binding CurrentProgress}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="2">
+                    <TextBlock Text="{Binding OverallDetail}" FontSize="11" FontWeight="SemiBold"/>
+                    <ProgressBar Minimum="0" Maximum="100" MinWidth="0" Height="16" ShowProgressText="True"
+                                 Value="{Binding OverallProgress}"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="{Binding SessionText}" Classes="done" FontWeight="SemiBold"
+                       IsVisible="{Binding HasSessionText}" TextWrapping="Wrap"/>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding Status}" TextWrapping="Wrap"/>
+                <TextBlock Grid.Column="1" Text="{Binding TotalText}" Classes="muted" Margin="12,0,0,0"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- ============ Log ============ -->
+        <Border Grid.Row="4" BorderBrush="#D0D7DE" BorderThickness="1" CornerRadius="4">
+            <Grid RowDefinitions="Auto,*">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="8,4">
+                    <TextBlock Grid.Column="0" Text="Log" Classes="colhead" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Content="Logbestand openen" Click="OnOpenLogFile" Padding="8,1" FontSize="11" Margin="0,0,4,0"/>
+                    <Button Grid.Column="2" Content="Kopieer" Click="OnCopyLog" Padding="8,1" FontSize="11" Margin="0,0,4,0"/>
+                    <Button Grid.Column="3" Content="Wis" Click="OnClearLog" Padding="8,1" FontSize="11"/>
+                </Grid>
+                <ScrollViewer Grid.Row="1" x:Name="LogScroll" Background="#F6F8FA"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                    <SelectableTextBlock Text="{Binding LogText}" TextWrapping="Wrap"
+                                         FontFamily="Consolas, Courier New" FontSize="12"
+                                         Padding="8,4,8,14"/>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
