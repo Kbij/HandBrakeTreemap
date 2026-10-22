@@ -185,6 +185,26 @@ public sealed class HandBrakeRunner
         }
     }
 
+    /// <summary>Raw output of <c>HandBrakeCLI --scan --json</c> (contains "JSON Title Set: {...}").</summary>
+    public async Task<string?> ScanJsonAsync(string path, CancellationToken token)
+    {
+        try
+        {
+            var (output, _) = await RunToEndAsync(
+                new[] { "--json", "--scan", "--previews", "1:0", "--input", path }, token);
+            return output;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Scan mislukt voor {path}: {ex.Message}");
+            return null;
+        }
+    }
+
     private async Task<(string output, int exitCode)> RunToEndAsync(IEnumerable<string> args, CancellationToken token)
     {
         var psi = BaseStartInfo();

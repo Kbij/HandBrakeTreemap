@@ -192,6 +192,62 @@ public static class PresetCatalog
         return result;
     }
 
+    /// <summary>Read the settings of one preset (by name) from a preset .json, for explanations.</summary>
+    public static PresetSettings? GetSettings(string? file, string name)
+    {
+        if (string.IsNullOrWhiteSpace(file) || !File.Exists(file)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(file),
+                new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            var root = doc.RootElement;
+            var list = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("PresetList", out var pl) ? pl : root;
+            var el = FindPreset(list, name);
+            if (el == null) return null;
+            var p = el.Value;
+
+            string S(string k) => p.TryGetProperty(k, out var v)
+                ? v.ValueKind switch { JsonValueKind.String => v.GetString() ?? "", JsonValueKind.Number => v.GetRawText(), _ => "" }
+                : "";
+            double D(string k) => p.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0;
+
+            var enc = new List<string>();
+            var rates = new List<int>();
+            if (p.TryGetProperty("AudioList", out var al) && al.ValueKind == JsonValueKind.Array)
+                foreach (var a in al.EnumerateArray())
+                {
+                    enc.Add(a.TryGetProperty("AudioEncoder", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() ?? "?" : "?");
+                    rates.Add(a.TryGetProperty("AudioBitrate", out var b) && b.ValueKind == JsonValueKind.Number ? b.GetInt32() : 0);
+                }
+
+            return new PresetSettings(name, S("VideoEncoder"), (int)D("VideoQualityType"), D("VideoQualitySlider"),
+                                      (int)D("VideoAvgBitrate"), S("VideoFramerate"), S("VideoFramerateMode"),
+                                      (int)D("PictureWidth"), (int)D("PictureHeight"), enc, rates);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Presetinstellingen niet te lezen: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static JsonElement? FindPreset(JsonElement list, string name)
+    {
+        if (list.ValueKind != JsonValueKind.Array) return null;
+        foreach (var el in list.EnumerateArray())
+        {
+            if (el.ValueKind != JsonValueKind.Object) continue;
+            if (el.TryGetProperty("ChildrenArray", out var ch) && ch.ValueKind == JsonValueKind.Array && ch.GetArrayLength() > 0)
+            {
+                var hit = FindPreset(ch, name);
+                if (hit != null) return hit;
+                continue;
+            }
+            if (GetString(el, "PresetName") == name) return el;
+        }
+        return null;
+    }
+
     /// <summary>Custom presets from a HandBrake preset .json (GUI store or an exported file).</summary>
     public static List<PresetItem> LoadCustom(string file)
     {

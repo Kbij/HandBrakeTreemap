@@ -23,7 +23,9 @@ public sealed class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         Log.Line += OnLogLine;
-        Log.Info($"HandBrake Treemap gestart. Logbestand: {Log.FilePath}");
+        string built = "?";
+        try { built = File.GetLastWriteTime(typeof(MainViewModel).Assembly.Location).ToString("yyyy-MM-dd HH:mm:ss"); } catch { }
+        Log.Info($"HandBrake Treemap gestart (build {built}). Logbestand: {Log.FilePath}");
 
         // --- Restore settings (registry) ---
         _loadingSettings = true;
@@ -568,7 +570,10 @@ public sealed class MainViewModel : ViewModelBase
                     // Not worth it: drop the new .mkv, keep the original and mark it "*.nomkv.*".
                     var pct = Format.Change(file.SizeBytes, result.MkvBytes);
                     Log.Info($"Te weinig besparing ({Format.Bytes(file.SizeBytes)} → {Format.Bytes(result.MkvBytes)}, {pct}): {file.FullPath}");
-                    MarkNotWorth(file, $"besparing {pct} < {minPct}%");
+                    // Find out why while the .mkv still exists.
+                    CurrentDetail = "analyseren waarom…";
+                    var why = await AnalyseAsync(file.FullPath, file.TargetPath, preset, importFile);
+                    MarkNotWorth(file, $"besparing {pct} < {minPct}%" + (why != null ? $" — {why}" : ""));
                     notWorth++;
                 }
                 else if (result.Success || result.Skipped)
@@ -621,6 +626,57 @@ public sealed class MainViewModel : ViewModelBase
             _cts?.Dispose();
             _cts = null;
             RefreshSelectedFiles();
+        }
+    }
+
+    /// <summary>
+    /// Probe original (and .mkv if given) with HandBrakeCLI and log why the conversion
+    /// does not save space. Returns a short reason, or null when the source can't be read.
+    /// </summary>
+    private async Task<string?> AnalyseAsync(string originalPath, string? mkvPath, string presetName, string? importFile)
+    {
+        try
+        {
+            Log.Info($"Analyse: {Path.GetFileName(originalPath)}");
+            var src = await MediaAnalysis.ProbeAsync(_runner, originalPath, CancellationToken.None);
+            if (src == null)
+            {
+                Log.Warn("  Analyse: bron kon niet gelezen worden.");
+                return null;
+            }
+            MediaInfo? outp = null;
+            if (!string.IsNullOrEmpty(mkvPath) && File.Exists(mkvPath))
+                outp = await MediaAnalysis.ProbeAsync(_runner, mkvPath, CancellationToken.None);
+
+            var settings = PresetCatalog.GetSettings(importFile, presetName);
+            var (reason, lines) = MediaAnalysis.Explain(src, outp, settings);
+            foreach (var l in lines) Log.Info("  " + l);
+            return reason;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Analyse mislukt", ex);
+            return null;
+        }
+    }
+
+    /// <summary>"Analyseer" button: explain what converting this file does / would do.</summary>
+    public async Task AnalyseFileAsync(VideoFile file)
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        Status = $"Analyseren: {file.Name}…";
+        try
+        {
+            var p = SelectedPreset;
+            var importFile = p?.ImportFile ?? (string.IsNullOrWhiteSpace(PresetImportFile) ? null : PresetImportFile);
+            var why = await AnalyseAsync(file.FullPath, File.Exists(file.TargetPath) ? file.TargetPath : null,
+                                         p?.Name ?? "", importFile);
+            Status = why != null ? $"Analyse {file.Name}: {why} (details in de log)" : "Analyse mislukt (zie log).";
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 

@@ -146,6 +146,9 @@
                     <Button Content="Zet bestand om" Click="OnConvertFile" Margin="0,0,6,4" Classes="accent"
                             IsEnabled="{Binding IsNotBusy}"
                             ToolTip.Tip="Zet alleen het geselecteerde bestand om (handig als test van een preset)"/>
+                    <Button Content="Analyseer" Click="OnAnalyseFile" Margin="0,0,6,4"
+                            IsEnabled="{Binding IsNotBusy}"
+                            ToolTip.Tip="Leest bron (en .mkv) uit en legt in de log uit waarom omzetten wel/niet loont"/>
                     <Button Content="Speel origineel" Click="OnPlayOriginal" Margin="0,0,6,4"/>
                     <Button Content="Speel .mkv" Click="OnPlayMkv" Margin="0,0,6,4"/>
                     <Button Content="Toon in Verkenner" Click="OnReveal" Margin="0,0,6,4"/>

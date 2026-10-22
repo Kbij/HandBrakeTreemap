@@ -241,6 +241,13 @@ public partial class MainWindow : Window
         await Vm.ConvertFileAsync(f);
     }
 
+    private async void OnAnalyseFile(object? sender, RoutedEventArgs e)
+    {
+        var f = CurrentFile;
+        if (f == null) { NoFileSelected(); return; }
+        await Vm.AnalyseFileAsync(f);
+    }
+
     private void OnPlayOriginal(object? sender, RoutedEventArgs e)
     {
         var f = CurrentFile;
