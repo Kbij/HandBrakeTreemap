@@ -515,6 +515,7 @@ public sealed class MainViewModel : ViewModelBase
                 file.Status = FileStatus.Converting;
                 file.Progress = 0;
                 file.Error = string.Empty;
+                file.Folder?.RecalculateUpwards(); // mark the folder (and its parents) as "bezig"
                 CurrentFileText = $"[{i + 1}/{queue.Count}] {file.RelativePath}";
                 Status = $"Bezig met {label}: {i + 1} van {queue.Count}";
 
@@ -618,6 +619,15 @@ public sealed class MainViewModel : ViewModelBase
         }
         finally
         {
+            // After an unexpected error a file may still say "bezig": put it back on "te doen".
+            foreach (var f in queue.Where(f => f.IsConverting))
+            {
+                f.Status = FileStatus.Pending;
+                f.Progress = 0;
+                f.Folder?.RecalculateUpwards();
+            }
+            UpdateTexts();
+
             CurrentFileText = string.Empty;
             CurrentDetail = string.Empty;
             OverallDetail = $"Totaal: klaar in {Format.Duration(runClock.Elapsed)}";

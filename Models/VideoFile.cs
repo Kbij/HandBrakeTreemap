@@ -42,8 +42,12 @@ public sealed class VideoFile : ViewModelBase
     /// <summary>Marker in a file name meaning "tried, not worth converting — keep the original".</summary>
     public const string NoMkvMarker = ".nomkv.";
 
+    /// <summary>
+    /// Any "nomkv" in the name counts (".nomkv.", "-nomkv", "_NoMkv", …): already tried,
+    /// no real saving — never counted, queued or paired.
+    /// </summary>
     public static bool HasNoMkvMarker(string fileName)
-        => fileName.Contains(NoMkvMarker, StringComparison.OrdinalIgnoreCase);
+        => fileName.Contains("nomkv", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>"film.mp4" → "film.nomkv.mp4" (same folder).</summary>
     public static string NoMkvPathFor(string fullPath)

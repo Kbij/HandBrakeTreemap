@@ -57,6 +57,28 @@ public sealed class FolderNode : ViewModelBase
     public string CountDisplay => PendingCount > 0 ? PendingCount.ToString() : "";
     public string SavedDisplay => ConvertedCount > 0 ? Format.Bytes(SavedBytes) : "";
 
+    /// <summary>
+    /// Somewhere in this folder (or below) an original sits next to its .mkv and has not been
+    /// cleaned up yet — the tree row is tinted light red.
+    /// </summary>
+    public bool HasLeftoverOriginals => ConvertedCount > 0;
+
+    /// <summary>A file in this folder (or below) is being converted right now — row tinted blue.</summary>
+    public bool IsConverting { get; private set; }
+
+    /// <summary>Tooltip for the tree row.</summary>
+    public string? RowTip
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (IsConverting) parts.Add("Wordt nu omgezet");
+            if (ConvertedCount > 0)
+                parts.Add($"{ConvertedCount} omgezet(te) origine(e)l(en) nog niet verwijderd ({Format.Bytes(ConvertedOriginalBytes)})");
+            return parts.Count > 0 ? string.Join("\n", parts) : null;
+        }
+    }
+
     public bool IsEmpty => Files.Count == 0 && Children.Count == 0;
 
     public IEnumerable<VideoFile> AllFiles()
@@ -74,9 +96,11 @@ public sealed class FolderNode : ViewModelBase
         long pBytes = 0, cOrig = 0, cMkv = 0;
         int pCount = 0, cCount = 0, failed = 0, nwCount = 0;
         long nwBytes = 0;
+        bool converting = false;
 
         foreach (var f in Files)
         {
+            if (f.IsConverting) converting = true;
             if (f.IsPending || f.IsConverting)
             {
                 pBytes += f.SizeBytes;
@@ -106,8 +130,10 @@ public sealed class FolderNode : ViewModelBase
             cMkv += c.ConvertedMkvBytes;
             nwCount += c.NotWorthCount;
             nwBytes += c.NotWorthBytes;
+            if (c.IsConverting) converting = true;
         }
 
+        IsConverting = converting;
         PendingBytes = pBytes;
         PendingCount = pCount;
         FailedCount = failed;
@@ -121,7 +147,8 @@ public sealed class FolderNode : ViewModelBase
               nameof(ConvertedCount), nameof(ConvertedOriginalBytes), nameof(ConvertedMkvBytes),
               nameof(NotWorthCount), nameof(NotWorthBytes),
               nameof(SavedBytes), nameof(IsDone), nameof(PendingFraction),
-              nameof(PendingDisplay), nameof(CountDisplay), nameof(SavedDisplay));
+              nameof(PendingDisplay), nameof(CountDisplay), nameof(SavedDisplay),
+              nameof(HasLeftoverOriginals), nameof(IsConverting), nameof(RowTip));
 
         // Siblings' share of this folder changed too.
         foreach (var c in Children)
